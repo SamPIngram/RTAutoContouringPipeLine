@@ -1,0 +1,25 @@
+{
+  "Name": "RT-Pipeline-Orthanc",
+  "HttpPort": 8042,
+  "DicomPort": 4242,
+  "DicomAet": "RTPIPELINE",
+  "StorageDirectory": "/var/lib/orthanc/db",
+
+  "AuthenticationEnabled": true,
+
+  "DicomModalities": {},
+
+  "WebDavEnabled": false,
+  "HttpCompressionEnabled": true,
+
+  "Plugins": [],
+
+  "WebHooks": {
+    "NewInstance": [
+      {
+        "Url": "http://backend:8000/api/orthanc/webhook",
+        "Events": ["NewInstance", "StableStudy"]
+      }
+    ]
+  }
+}
