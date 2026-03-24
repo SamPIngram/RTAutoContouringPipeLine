@@ -1,14 +1,14 @@
 import logging
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 class ValidationRequest(BaseModel):
-    model_id: int
+    model_id: str  # string identifier matching the model artifact path (e.g. "nnunet_prostate_v1.2")
     dataset_id: int
     ground_truth_dir: str | None = None
 
@@ -23,7 +23,7 @@ class MetricsResponse(BaseModel):
     status: str
     dice: float | None = None
     hd95: float | None = None
-    structure_metrics: dict = {}
+    structure_metrics: dict = Field(default_factory=dict)
 
 
 @router.post(

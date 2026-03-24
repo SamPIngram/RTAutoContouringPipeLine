@@ -1,5 +1,8 @@
 import logging
+import tempfile
+import zipfile
 from dataclasses import dataclass
+from pathlib import Path
 
 import httpx
 
@@ -46,38 +49,55 @@ class OrthancService:
     def download_study_dicom(self, orthanc_study_id: str, dest_dir: str) -> str:
         """Download the study as a DICOM archive to dest_dir.
 
+        Streams the archive to a temporary file to avoid loading the entire
+        archive into memory, then extracts it in place.
+
         Returns the path to the extracted directory.
         """
-        import io
-        import zipfile
-        from pathlib import Path
-
         dest = Path(dest_dir)
         dest.mkdir(parents=True, exist_ok=True)
 
         with self._client() as client:
-            resp = client.get(f"{self._base_url}/studies/{orthanc_study_id}/archive")
-            resp.raise_for_status()
+            # Stream response to a temp file — DICOM archives can be several GB
+            with client.stream(
+                "GET", f"{self._base_url}/studies/{orthanc_study_id}/archive"
+            ) as resp:
+                resp.raise_for_status()
+                with tempfile.TemporaryFile() as tmp:
+                    for chunk in resp.iter_bytes(chunk_size=65536):
+                        tmp.write(chunk)
+                    tmp.seek(0)
+                    with zipfile.ZipFile(tmp) as zf:
+                        zf.extractall(dest)
 
-        with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
-            zf.extractall(dest)
-
-        logger.info("DICOM study downloaded", extra={"orthanc_id": orthanc_study_id, "dest": str(dest)})
+        logger.info(
+            "DICOM study downloaded",
+            extra={"orthanc_id": orthanc_study_id, "dest": str(dest)},
+        )
         return str(dest)
 
     def send_file(self, file_path: str) -> str:
-        """Upload a DICOM file to Orthanc. Returns the Orthanc instance ID."""
-        from pathlib import Path
+        """Upload a DICOM file to Orthanc. Returns the Orthanc instance ID.
+
+        Streams the file in chunks to avoid loading the entire DICOM file
+        (e.g. RTSTRUCT or large series) into memory.
+        """
+        def _iter_file(path: str):
+            with open(path, "rb") as f:
+                while chunk := f.read(65536):
+                    yield chunk
 
         with self._client() as client:
-            with open(file_path, "rb") as f:
-                resp = client.post(
-                    f"{self._base_url}/instances",
-                    content=f.read(),
-                    headers={"Content-Type": "application/dicom"},
-                )
+            resp = client.post(
+                f"{self._base_url}/instances",
+                content=_iter_file(file_path),
+                headers={"Content-Type": "application/dicom"},
+            )
             resp.raise_for_status()
             instance_id: str = resp.json()["ID"]
 
-        logger.info("DICOM file sent to Orthanc", extra={"file": Path(file_path).name, "instance_id": instance_id})
+        logger.info(
+            "DICOM file sent to Orthanc",
+            extra={"file": Path(file_path).name, "instance_id": instance_id},
+        )
         return instance_id

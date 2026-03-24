@@ -8,14 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 class DicomToNiftiConverter:
-    """Convert DICOM series to NIfTI with resampling and orientation normalisation."""
+    """Convert DICOM series to NIfTI with orientation normalisation."""
 
     def __init__(self, output_base_dir: str = "/data/nifti") -> None:
         self._output_base_dir = Path(output_base_dir)
 
     def convert_from_orthanc(self, orthanc_study_id: str) -> dict:
         """Download from Orthanc and convert."""
-        import os
         import tempfile
 
         from backend.config import load_settings
@@ -34,8 +33,35 @@ class DicomToNiftiConverter:
             return self._convert_directory(dicom_dir, study_info.study_uid)
 
     def convert_from_folder(self, folder_path: str, recursive: bool = True) -> dict:
-        """Convert DICOM files from a local folder."""
-        return self._convert_directory(folder_path, study_uid=Path(folder_path).name)
+        """Convert DICOM series from a local folder.
+
+        If recursive=True, walks all subdirectories and converts every DICOM
+        series found. Each subdirectory is treated as a separate series group.
+        If recursive=False, only the top-level directory is scanned.
+        """
+        if not recursive:
+            return self._convert_directory(folder_path, study_uid=Path(folder_path).name)
+
+        # Walk the tree and collect every directory that contains a DICOM series
+        reader = sitk.ImageSeriesReader()
+        dicom_dirs: list[str] = []
+        for dirpath, _, _ in os.walk(folder_path):
+            if reader.GetGDCMSeriesIDs(dirpath):
+                dicom_dirs.append(dirpath)
+
+        if not dicom_dirs:
+            raise ValueError(f"No DICOM series found under {folder_path}")
+
+        all_nifti_paths: list[str] = []
+        for dicom_dir in sorted(dicom_dirs):
+            result = self._convert_directory(dicom_dir, study_uid=Path(dicom_dir).name)
+            all_nifti_paths.extend(result["nifti_paths"])
+
+        return {
+            "study_uid": Path(folder_path).name,
+            "nifti_paths": all_nifti_paths,
+            "output_dir": str(self._output_base_dir),
+        }
 
     def convert_from_proknow(
         self, workspace: str, patient_id: str | None = None
@@ -46,7 +72,8 @@ class DicomToNiftiConverter:
     def _convert_directory(self, dicom_dir: str, study_uid: str) -> dict:
         """Read all DICOM series in a directory and write NIfTI files.
 
-        Applies LPS→RAS orientation normalisation and 1mm isotropic resampling.
+        Applies LPS→RAS orientation normalisation. No spatial resampling is
+        performed; images are written at their native voxel spacing.
         """
         reader = sitk.ImageSeriesReader()
         series_ids = reader.GetGDCMSeriesIDs(dicom_dir)

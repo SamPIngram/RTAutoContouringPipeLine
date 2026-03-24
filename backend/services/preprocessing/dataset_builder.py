@@ -27,7 +27,9 @@ class DatasetBuilder:
             study_nifti_dirs = list(nifti_root.glob(f"*{study_id}*"))
             for study_dir in study_nifti_dirs:
                 for nifti_file in study_dir.glob("*.nii.gz"):
-                    dest = images_dir / nifti_file.name
+                    # Prefix with study_id to prevent silent overwrites when
+                    # multiple studies share the same series/filename.
+                    dest = images_dir / f"{study_id}_{nifti_file.name}"
                     shutil.copy2(nifti_file, dest)
                     copied += 1
 

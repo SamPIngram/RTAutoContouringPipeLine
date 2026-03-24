@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ router = APIRouter()
 class DatasetCreate(BaseModel):
     name: str
     description: str | None = None
-    study_ids: list[int] = []
+    study_ids: list[int] = Field(default_factory=list)
 
 
 class DatasetResponse(BaseModel):

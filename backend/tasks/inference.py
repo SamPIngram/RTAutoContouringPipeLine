@@ -17,12 +17,16 @@ def run_inference(
     study_uid: str,
     input_nifti_path: str,
     model_id: str,
+    reference_dicom_dir: str,
     fallback_to_cpu: bool = True,
     trigger_timestamp: float | None = None,
 ) -> dict:
     """Run model inference and generate RTSTRUCT output.
 
-    Records the inference run in the database including timing and hardware used.
+    Returns a dict with timing metadata (inference_ms, hardware_used,
+    trigger_to_export_ms). Persistence of the InferenceRun record should
+    be handled by the caller after inspecting the returned result.
+
     Falls back to CPU with a warning if GPU is unavailable and fallback_to_cpu=True.
     """
     from backend.hardware import probe_hardware, warn_if_no_gpu
@@ -51,6 +55,7 @@ def run_inference(
         input_nifti_path=input_nifti_path,
         model_id=model_id,
         hardware=hardware_used,
+        reference_dicom_dir=reference_dicom_dir,
     )
     inference_ms = int((time.monotonic() - t0) * 1000)
 

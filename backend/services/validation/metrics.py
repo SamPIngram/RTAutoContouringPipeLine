@@ -11,7 +11,7 @@ class MetricsCalculator:
 
     def compute(
         self,
-        model_id: int,
+        model_id: str,
         dataset_id: int,
         ground_truth_dir: str | None = None,
     ) -> dict:
@@ -43,7 +43,8 @@ class MetricsCalculator:
             return {"dice": None, "hd95": None, "structure_metrics": {}}
 
         mean_dice = float(np.mean([m["dice"] for m in structure_metrics.values()]))
-        mean_hd95 = float(np.mean([m["hd95"] for m in structure_metrics.values() if m["hd95"] is not None]))
+        hd95_values = [m["hd95"] for m in structure_metrics.values() if m["hd95"] is not None]
+        mean_hd95: float | None = float(np.mean(hd95_values)) if hd95_values else None
 
         return {"dice": mean_dice, "hd95": mean_hd95, "structure_metrics": structure_metrics}
 

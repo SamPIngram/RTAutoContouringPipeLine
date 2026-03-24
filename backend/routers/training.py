@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
@@ -15,7 +15,7 @@ class TrainingRequest(BaseModel):
     model_name: str
     framework: str = "nnunet"
     gpu_index: int | None = None
-    extra_config: dict = {}
+    extra_config: dict = Field(default_factory=dict)
 
 
 class TrainingStatusResponse(BaseModel):

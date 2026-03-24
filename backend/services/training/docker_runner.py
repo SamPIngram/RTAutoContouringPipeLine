@@ -15,6 +15,12 @@ class DockerRunner:
     - Dataset directory mounted read-only
     - Model output directory mounted read-write
     - Auto-removed on exit
+
+    NOTE: The dataset_dir and output_dir paths (e.g. /data/datasets/<id>) must
+    exist on the *Docker host* filesystem, not just inside the backend container.
+    When running via docker-compose, ensure the 'pipeline_data' named volume is
+    mounted at /data in both the backend container and exposed to the host so that
+    sibling training containers can bind-mount the same paths.
     """
 
     def __init__(self, training_image: str = DEFAULT_TRAINING_IMAGE) -> None:
@@ -39,10 +45,12 @@ class DockerRunner:
         output_dir = f"/data/models/{model_name}"
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
+        # Only mount the data directories — do NOT mount the Docker socket into
+        # training containers; they have no need to orchestrate containers and
+        # the socket grants root-equivalent access to the host.
         volumes = {
             dataset_dir: {"bind": "/dataset", "mode": "ro"},
             output_dir: {"bind": "/output", "mode": "rw"},
-            "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
         }
 
         device_requests = []
@@ -66,7 +74,7 @@ class DockerRunner:
             extra={"image": self._image, "gpu_index": gpu_index, "model_name": model_name},
         )
 
-        container = client.containers.run(
+        client.containers.run(
             self._image,
             environment=environment,
             volumes=volumes,

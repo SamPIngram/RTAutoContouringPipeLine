@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 @app.task(name="backend.tasks.metrics.compute_geometric_metrics", bind=True)
 def compute_geometric_metrics(
     self,
-    model_id: int,
+    model_id: str,
     dataset_id: int,
     ground_truth_dir: str | None = None,
 ) -> dict:
