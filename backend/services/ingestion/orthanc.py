@@ -27,7 +27,20 @@ class OrthancService:
         self._auth = (username, password)
 
     def _client(self) -> httpx.Client:
+        """Standard client for metadata calls (30 s total timeout)."""
         return httpx.Client(auth=self._auth, timeout=30)
+
+    def _download_client(self) -> httpx.Client:
+        """Client for large archive downloads with an extended read timeout.
+
+        DICOM study archives can be several GB; a 30 s total timeout is
+        insufficient. Use a generous read timeout (10 min) while keeping the
+        connect timeout short.
+        """
+        return httpx.Client(
+            auth=self._auth,
+            timeout=httpx.Timeout(connect=10, read=600, write=60, pool=10),
+        )
 
     def get_study_info(self, orthanc_study_id: str) -> OrthancStudyInfo:
         with self._client() as client:
@@ -57,7 +70,7 @@ class OrthancService:
         dest = Path(dest_dir)
         dest.mkdir(parents=True, exist_ok=True)
 
-        with self._client() as client:
+        with self._download_client() as client:
             # Stream response to a temp file — DICOM archives can be several GB
             with client.stream(
                 "GET", f"{self._base_url}/studies/{orthanc_study_id}/archive"

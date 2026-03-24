@@ -47,7 +47,14 @@ class RtStructGenerator:
         out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        rtstruct_path = out_dir / f"{input_path.stem}_rtstruct.dcm"
+        # Strip the full .nii.gz suffix (Path.stem only removes one extension,
+        # so "scan.nii.gz" → stem "scan.nii" which would give "scan.nii_rtstruct.dcm").
+        name = input_path.name
+        for ext in (".nii.gz", ".nii"):
+            if name.endswith(ext):
+                name = name[: -len(ext)]
+                break
+        rtstruct_path = out_dir / f"{name}_rtstruct.dcm"
 
         # Run model inference (delegated to the appropriate runner)
         prediction_nifti = self._run_model(input_nifti_path, model_id, hardware)

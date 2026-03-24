@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -6,25 +7,36 @@ logger = logging.getLogger(__name__)
 # Docker image used for training jobs (override via config if needed)
 DEFAULT_TRAINING_IMAGE = "rtpipeline/training:latest"
 
+# Name of the Docker named volume that holds all pipeline data (/data).
+# This must match the volume name declared in docker-compose.yml so that
+# training containers can access datasets and write model outputs without
+# relying on host-path bind mounts (which are resolved on the Docker daemon
+# host and won't match paths inside the backend container).
+PIPELINE_DATA_VOLUME = os.environ.get("PIPELINE_DATA_VOLUME", "rtautocontouringpipeline_pipeline_data")
+
 
 class DockerRunner:
     """Spawn ephemeral Docker containers for heavy training jobs.
 
     Uses the Docker SDK to create a container with:
     - GPU device mapping (if available)
-    - Dataset directory mounted read-only
-    - Model output directory mounted read-write
+    - The pipeline_data named volume mounted at /data (read/write)
     - Auto-removed on exit
 
-    NOTE: The dataset_dir and output_dir paths (e.g. /data/datasets/<id>) must
-    exist on the *Docker host* filesystem, not just inside the backend container.
-    When running via docker-compose, ensure the 'pipeline_data' named volume is
-    mounted at /data in both the backend container and exposed to the host so that
-    sibling training containers can bind-mount the same paths.
+    NOTE: Training containers access datasets and write model outputs via the
+    shared named volume (PIPELINE_DATA_VOLUME → /data).  Do NOT use host-path
+    bind mounts for /data/datasets/* or /data/models/*: those paths are inside
+    the named volume, not on the host filesystem, and direct bind mounts from
+    within the backend container will fail or point to the wrong location.
     """
 
-    def __init__(self, training_image: str = DEFAULT_TRAINING_IMAGE) -> None:
+    def __init__(
+        self,
+        training_image: str = DEFAULT_TRAINING_IMAGE,
+        data_volume: str = PIPELINE_DATA_VOLUME,
+    ) -> None:
         self._image = training_image
+        self._data_volume = data_volume
 
     def run_training(
         self,
@@ -41,17 +53,18 @@ class DockerRunner:
 
         client = docker.from_env()
 
-        dataset_dir = f"/data/datasets/{dataset_id}"
-        output_dir = f"/data/models/{model_name}"
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        dataset_subpath = f"datasets/{dataset_id}"
+        output_subpath = f"models/{model_name}"
 
-        # Only mount the data directories — do NOT mount the Docker socket into
-        # training containers; they have no need to orchestrate containers and
-        # the socket grants root-equivalent access to the host.
+        # Mount the named volume; the training container accesses data via /data
+        # subdirectories set through environment variables.
         volumes = {
-            dataset_dir: {"bind": "/dataset", "mode": "ro"},
-            output_dir: {"bind": "/output", "mode": "rw"},
+            self._data_volume: {"bind": "/data", "mode": "rw"},
         }
+
+        # Ensure the output directory exists inside the volume by creating it
+        # via the backend container's own /data mount before spawning the job.
+        Path(f"/data/{output_subpath}").mkdir(parents=True, exist_ok=True)
 
         device_requests = []
         if gpu_index is not None:
@@ -64,8 +77,8 @@ class DockerRunner:
         environment = {
             "FRAMEWORK": framework,
             "MODEL_NAME": model_name,
-            "DATASET_DIR": "/dataset",
-            "OUTPUT_DIR": "/output",
+            "DATASET_DIR": f"/data/{dataset_subpath}",
+            "OUTPUT_DIR": f"/data/{output_subpath}",
             **(extra_config or {}),
         }
 
@@ -84,4 +97,4 @@ class DockerRunner:
         )
 
         logger.info("Training container exited", extra={"model_name": model_name})
-        return {"model_path": output_dir, "status": "complete"}
+        return {"model_path": f"/data/{output_subpath}", "status": "complete"}

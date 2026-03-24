@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -64,10 +65,12 @@ class NnUNetRunner(BaseModelRunner):
     ) -> Path:
         """Run nnUNetv2_train.
 
-        Returns the path to the trained model results directory.
+        Returns the path to the nnU-Net results directory for this model,
+        i.e. $nnUNet_results/<model_name>/<trainer>__<plans>__<configuration>/fold_<fold>.
+        Falls back to /data/nnunet_results if the env var is not set.
         """
         dataset_dir = Path(dataset_dir)
-        env_vars = {}
+        env_vars: dict[str, str] = {}
         if gpu_index is not None:
             env_vars["CUDA_VISIBLE_DEVICES"] = str(gpu_index)
 
@@ -78,7 +81,6 @@ class NnUNetRunner(BaseModelRunner):
             str(fold),
         ]
 
-        import os
         env = {**os.environ, **env_vars}
         logger.info("Running nnU-Net training", extra={"cmd": " ".join(cmd)})
         result = subprocess.run(cmd, capture_output=True, text=True, env=env)
@@ -86,4 +88,8 @@ class NnUNetRunner(BaseModelRunner):
         if result.returncode != 0:
             raise RuntimeError(f"nnUNetv2_train failed:\n{result.stderr}")
 
-        return dataset_dir
+        # nnU-Net v2 writes results to $nnUNet_results/<dataset>/<trainer>__<plans>__<config>/fold_<n>
+        nnunet_results_root = Path(env.get("nnUNet_results", "/data/nnunet_results"))
+        results_dir = nnunet_results_root / model_name
+        logger.info("nnU-Net training complete", extra={"results_dir": str(results_dir)})
+        return results_dir

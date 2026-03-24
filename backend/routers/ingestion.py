@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,13 +72,17 @@ async def ingest_proknow(
     request: ProKnowIngestRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Enqueue a ProKnow sync job."""
-    from backend.tasks.conversion import convert_dicom_to_nifti
+    """Trigger a ProKnow workspace sync.
 
-    task = convert_dicom_to_nifti.delay(
-        proknow_workspace=request.workspace,
-        proknow_patient_id=request.patient_id,
-        import_source="proknow_sync",
+    NOTE: ProKnow ingestion is not yet implemented. The DicomToNiftiConverter
+    ProKnow path raises NotImplementedError; enqueueing a task that
+    deterministically fails is unhelpful. Configure ProKnow credentials in
+    config.toml and implement ProKnowSync.sync_workspace() before enabling.
+    """
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "ProKnow ingestion is not yet implemented. "
+            "Configure credentials in config.toml and implement the ProKnow sync path."
+        ),
     )
-    logger.info("ProKnow sync task enqueued", extra={"task_id": task.id})
-    return {"status": "queued", "task_id": task.id}

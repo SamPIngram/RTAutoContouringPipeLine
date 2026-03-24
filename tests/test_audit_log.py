@@ -1,6 +1,7 @@
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 from backend.database import Base
 from backend.models.audit_log import AuditLog
@@ -8,8 +9,17 @@ from backend.models.audit_log import AuditLog
 
 @pytest_asyncio.fixture
 async def db_session():
-    """In-memory SQLite session for unit tests."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    """In-memory SQLite session for unit tests.
+
+    StaticPool ensures that all connections (including the schema-creation
+    connection and the session connection) share the same underlying SQLite
+    in-memory database, preventing "no such table" errors.
+    """
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

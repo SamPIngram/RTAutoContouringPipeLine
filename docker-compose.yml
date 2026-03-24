@@ -1,3 +1,12 @@
+# SECURITY NOTE: This file ships with default credentials for local development
+# convenience. Before any non-local deployment, set all secrets via environment
+# variables or a secrets manager and ensure no default values are used:
+#   POSTGRES_PASSWORD, ORTHANC_USERNAME, ORTHANC_PASSWORD, SECRET_KEY
+#
+# The backend and celery_worker mount /var/run/docker.sock to allow spawning
+# training containers. This grants root-equivalent host access — restrict or
+# remove it if training container orchestration is not required.
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -82,6 +91,10 @@ services:
       celery -A backend.celery_app worker
       --loglevel=info
       --queues=default,gpu_queue
+    # GPU access for docker compose (non-Swarm).
+    # Requires the NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+    # The deploy.resources block is intentionally kept for Swarm/Compose v2 compatibility;
+    # for plain `docker compose`, the `device_requests` key below takes effect.
     deploy:
       resources:
         reservations:
@@ -89,6 +102,12 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    # Uncomment the block below as an alternative for older Compose CLI versions
+    # that ignore the deploy.resources key:
+    # device_requests:
+    #   - driver: nvidia
+    #     count: all
+    #     capabilities: [gpu]
 
   frontend:
     build:
