@@ -1,0 +1,32 @@
+[system]
+# Base directory for all data storage (datasets, NIfTI files, model outputs)
+data_dir = "/data"
+# Log level: DEBUG, INFO, WARNING, ERROR
+log_level = "INFO"
+
+[database]
+# Use PostgreSQL in production, SQLite for lightweight/local use
+# PostgreSQL: "postgresql+asyncpg://user:password@localhost:5432/rtautocontouring"
+# SQLite:     "sqlite+aiosqlite:///./rtautocontouring.db"
+url = "postgresql+asyncpg://rtuser:rtpassword@postgres:5432/rtautocontouring"
+
+[redis]
+url = "redis://redis:6379/0"
+
+[orthanc]
+url = "http://orthanc:8042"
+username = "orthanc"
+password = "orthanc"
+# AET name for this Orthanc instance
+aet = "RTPIPELINE"
+
+[gpu]
+# Comma-separated list of GPU indices to expose to workers. Empty = use all.
+visible_devices = ""
+# Maximum number of concurrent GPU inference jobs
+max_concurrent_inference = 2
+
+[proknow]
+# ProKnow API base URL and credentials (optional integration)
+base_url = ""
+credentials_file = ""
