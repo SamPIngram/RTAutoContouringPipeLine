@@ -56,6 +56,7 @@ class DeploymentRunner(BaseTrigger):
         input_nifti_path: str,
         reference_dicom_dir: str,
         trigger_ts: float | None = None,
+        guardrail_yaml: str | None = None,
     ) -> str:
         """Dispatch inference for a new study. Returns the Celery task ID.
 
@@ -65,6 +66,7 @@ class DeploymentRunner(BaseTrigger):
             reference_dicom_dir: Path to the original DICOM series directory —
                 required by rt-utils to build a valid RTSTRUCT with correct UIDs.
             trigger_ts: Monotonic timestamp of the trigger event for latency tracking.
+            guardrail_yaml: Optional YAML string for input/output guardrail validation.
         """
         from backend.tasks.inference import run_inference
 
@@ -77,6 +79,8 @@ class DeploymentRunner(BaseTrigger):
             reference_dicom_dir=reference_dicom_dir,
             fallback_to_cpu=inference_cfg.get("fallback_to_cpu", True),
             trigger_timestamp=trigger_ts or time.monotonic(),
+            guardrail_yaml=guardrail_yaml,
+            guardrail_block_on_failure=inference_cfg.get("guardrail_block_on_failure", False),
         )
         logger.info(
             "Inference task dispatched",

@@ -16,6 +16,7 @@ router = APIRouter()
 class DeploymentCreate(BaseModel):
     name: str
     toml_config: str
+    guardrail_config_id: int | None = None
 
 
 class DeploymentResponse(BaseModel):
@@ -24,6 +25,7 @@ class DeploymentResponse(BaseModel):
     active: bool
     trigger_type: str
     model_id: str | None
+    guardrail_config_id: int | None
 
     class Config:
         from_attributes = True
@@ -61,6 +63,7 @@ async def create_deployment(
         trigger_type=trigger,
         model_id=model_id,
         active=False,
+        guardrail_config_id=body.guardrail_config_id,
     )
     db.add(deployment)
     await db.commit()

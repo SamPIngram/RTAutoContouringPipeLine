@@ -33,6 +33,8 @@ dependencies = [
   "docker>=7.0",
   # ProKnow SDK
   "proknow>=0.18",
+  # AI guardrails for inference input/output validation
+  "healthcare-ai-guardrails>=0.1",
 ]
 
 [project.optional-dependencies]

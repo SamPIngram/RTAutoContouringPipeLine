@@ -8,7 +8,7 @@ from backend.config import load_settings
 from backend.database import create_tables, init_db
 from backend.hardware import probe_hardware
 from backend.logging_config import TraceIDMiddleware, configure_logging
-from backend.routers import audit, datasets, deployments, ingestion, training, validation
+from backend.routers import audit, datasets, deployments, fingerprinting, ingestion, training, validation
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ def create_app() -> FastAPI:
 
     app.include_router(ingestion.router, prefix="/api", tags=["Ingestion"])
     app.include_router(datasets.router, prefix="/api", tags=["Datasets"])
+    app.include_router(fingerprinting.router, prefix="/api", tags=["Fingerprinting & Guardrails"])
     app.include_router(training.router, prefix="/api", tags=["Training"])
     app.include_router(validation.router, prefix="/api", tags=["Validation"])
     app.include_router(deployments.router, prefix="/api", tags=["Deployments"])

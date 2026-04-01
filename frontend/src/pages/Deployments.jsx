@@ -13,6 +13,7 @@ series_description_regex = ".*t2.*"
 [inference]
 model_id = "nnunet_model_v1"
 fallback_to_cpu = true
+guardrail_block_on_failure = false
 
 [export]
 generate_rtstruct = true
@@ -27,9 +28,12 @@ export default function Deployments() {
   const [toml, setToml] = useState(DEFAULT_TOML)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [guardrails, setGuardrails] = useState([])
+  const [selectedGuardrail, setSelectedGuardrail] = useState('')
 
   useEffect(() => {
     axios.get('/api/deployments').then(res => setDeployments(res.data)).catch(() => {})
+    axios.get('/api/guardrails').then(res => setGuardrails(res.data)).catch(() => {})
   }, [])
 
   async function handleCreate(e) {
@@ -37,9 +41,14 @@ export default function Deployments() {
     setLoading(true)
     setError(null)
     try {
-      const res = await axios.post('/api/deployments', { name, toml_config: toml })
+      const res = await axios.post('/api/deployments', {
+        name,
+        toml_config: toml,
+        guardrail_config_id: selectedGuardrail ? parseInt(selectedGuardrail, 10) : null,
+      })
       setDeployments(prev => [res.data, ...prev])
       setName('')
+      setSelectedGuardrail('')
     } catch (err) {
       setError(err.response?.data?.detail ?? err.message)
     } finally {
@@ -74,9 +83,31 @@ export default function Deployments() {
           <textarea
             value={toml}
             onChange={e => setToml(e.target.value)}
-            rows={14}
+            rows={15}
             style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.85rem', padding: '0.5rem', borderRadius: 4, border: '1px solid #ccc', marginBottom: '0.5rem' }}
           />
+          <div style={{ marginBottom: '0.5rem' }}>
+            <label style={{ fontSize: '0.85rem', color: '#555', display: 'block', marginBottom: 2 }}>
+              AI Guardrail Config <span style={{ color: '#888', fontWeight: 400 }}>(optional)</span>
+            </label>
+            <select
+              value={selectedGuardrail}
+              onChange={e => setSelectedGuardrail(e.target.value)}
+              style={{ width: '100%', padding: '0.4rem 0.75rem', borderRadius: 4, border: '1px solid #ccc' }}
+            >
+              <option value="">— no guardrail —</option>
+              {guardrails.map(g => (
+                <option key={g.id} value={g.id}>
+                  {g.name} (dataset #{g.dataset_id})
+                </option>
+              ))}
+            </select>
+            {guardrails.length === 0 && (
+              <p style={{ fontSize: '0.78rem', color: '#888', marginTop: 3 }}>
+                No guardrail configs yet. Generate one on the <a href="/guardrails">Guardrails</a> page.
+              </p>
+            )}
+          </div>
           {error && <p style={{ color: 'red', marginBottom: '0.5rem' }}>{error}</p>}
           <button
             type="submit"
@@ -92,7 +123,12 @@ export default function Deployments() {
         <div className="card" key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <strong>{d.name}</strong>
-            <p style={{ fontSize: '0.8rem', color: '#666' }}>Trigger: {d.trigger_type} · Model: {d.model_id ?? '—'}</p>
+            <p style={{ fontSize: '0.8rem', color: '#666' }}>
+              Trigger: {d.trigger_type} · Model: {d.model_id ?? '—'}
+              {d.guardrail_config_id && (
+                <> · Guardrail: <a href={`/guardrails`} style={{ color: '#6a1aab' }}>#{d.guardrail_config_id}</a></>
+              )}
+            </p>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button

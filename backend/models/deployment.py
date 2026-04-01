@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.database import Base
@@ -18,6 +18,10 @@ class Deployment(Base):
     trigger_type: Mapped[str] = mapped_column(String(64))
     # FK to model_registry.id (denormalised for quick lookup)
     model_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # Optional guardrail config applied at inference time
+    guardrail_config_id: Mapped[int | None] = mapped_column(
+        ForeignKey("guardrail_configs.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
