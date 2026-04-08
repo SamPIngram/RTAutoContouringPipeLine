@@ -1,0 +1,21 @@
+[workflow]
+name = "Prostate_Routine_T2"
+active = true
+# Options: orthanc_new_study, folder_watch, api
+trigger = "orthanc_new_study"
+
+[filtering]
+modality = "MR"
+series_description_regex = ".*t2.*tra.*"
+
+[inference]
+model_id = "nnunet_prostate_v1.2"
+# Allow CPU fallback if all GPUs are saturated (logged as warning)
+fallback_to_cpu = true
+
+[export]
+generate_rtstruct = true
+rtstruct_name = "AI_Prostate_Contours"
+# Options: dicom_node, folder, download
+destination_type = "dicom_node"
+destination_aet = "CLINICAL_TPS"

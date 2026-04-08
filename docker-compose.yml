@@ -1,0 +1,125 @@
+# SECURITY NOTE: This file ships with default credentials for local development
+# convenience. Before any non-local deployment, set all secrets via environment
+# variables or a secrets manager and ensure no default values are used:
+#   POSTGRES_PASSWORD, ORTHANC_USERNAME, ORTHANC_PASSWORD, SECRET_KEY
+#
+# The backend and celery_worker mount /var/run/docker.sock to allow spawning
+# training containers. This grants root-equivalent host access — restrict or
+# remove it if training container orchestration is not required.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rtuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rtpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-rtautocontouring}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rtuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  orthanc:
+    image: orthancteam/orthanc:24.3.3
+    ports:
+      - "8042:8042"
+      - "4242:4242"
+    volumes:
+      - orthanc_data:/var/lib/orthanc/db
+      - ./docker/orthanc/orthanc.json:/etc/orthanc/orthanc.json:ro
+    environment:
+      ORTHANC__REGISTERED_USERS: '{"${ORTHANC_USERNAME:-orthanc}": "${ORTHANC_PASSWORD:-orthanc}"}'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8042/system"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+      - ./deployments:/app/deployments:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - pipeline_data:/data
+    environment:
+      CONFIG_PATH: /app/config.toml
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      orthanc:
+        condition: service_healthy
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - pipeline_data:/data
+    environment:
+      CONFIG_PATH: /app/config.toml
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      celery -A backend.celery_app worker
+      --loglevel=info
+      --queues=default,gpu_queue
+    # GPU access for docker compose (non-Swarm).
+    # Requires the NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+    # The deploy.resources block is intentionally kept for Swarm/Compose v2 compatibility;
+    # for plain `docker compose`, the `device_requests` key below takes effect.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Uncomment the block below as an alternative for older Compose CLI versions
+    # that ignore the deploy.resources key:
+    # device_requests:
+    #   - driver: nvidia
+    #     count: all
+    #     capabilities: [gpu]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  orthanc_data:
+  pipeline_data:
